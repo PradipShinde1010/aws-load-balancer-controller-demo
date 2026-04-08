@@ -1,4 +1,4 @@
-Demo 1: Deploying the App using AWS Load Balancer Controller
+Demo 1: Deploying the App using AWS Load Balancer Controller - Tested
 ==============================================
 Repo URL: https://github.com/KastroVKiran/aws-load-balancer-controller-demo.git
 
@@ -36,39 +36,29 @@ docker push kastrov/app1:1.0
 docker push kastrov/app2:1.0
 docker push kastrov/app3:1.0
 
-Install AWS Load Balancer Controller (Helm)
-Step 1 – Associate IAM OIDC
+🔹 STEP 1 — OIDC (correct cluster name!)
 eksctl utils associate-iam-oidc-provider \
 --region ap-south-1 \
 --cluster kastro-eks \
 --approve
 
-Step 2 – Create IAM Policy
-curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.6.0/docs/install/iam_policy.json
+🔹 STEP 2 — IAM Policy (latest)
+curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
 
 aws iam create-policy \
-  --policy-name AWSLoadBalancerControllerIAMPolicy-v2 \
+  --policy-name AWSLoadBalancerControllerIAMPolicy-v3 \
   --policy-document file://iam_policy.json
 
-aws iam attach-role-policy \
-  --role-name AmazonEKSLoadBalancerControllerRole \
-  --policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/AWSLoadBalancerControllerIAMPolicy-v2
-
-Step 3 – Create IAM Service Account
+🔹 STEP 3 — IAM Service Account (FIXED cluster name!)
 eksctl create iamserviceaccount \
-  --cluster=kastro-eks \
-  --namespace=kube-system \
-  --name=aws-load-balancer-controller \
-  --role-name AmazonEKSLoadBalancerControllerRole \
-  --attach-policy-arn=arn:aws:iam::<ACCOUNT_ID>:policy/AWSLoadBalancerControllerIAMPolicy \
+  --cluster kastro-eks \
+  --namespace kube-system \
+  --name aws-load-balancer-controller \
+  --attach-policy-arn arn:aws:iam::560185625463:policy/AWSLoadBalancerControllerIAMPolicy-v3 \
   --approve \
   --region ap-south-1
 
-Step 4 – Install via AWS Load Balancer Controller using Helm
-curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-helm version
-
-Add repo:
+🔹 STEP 4 — Install Controller
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update
 
@@ -77,22 +67,90 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --set clusterName=kastro-eks \
   --set serviceAccount.create=false \
   --set serviceAccount.name=aws-load-balancer-controller \
-  --set region=ap-south-1 \
-  --set v=2
+  --set region=ap-south-1
 
-kubectl get pods -n kube-system | grep load-balancer
+🔍 Verify:
+kubectl get pods -n kube-system
 
-Deploy Applications
+🔹 STEP 5 — Deploy Apps 
 kubectl apply -f k8s/
 
-kubectl get pods
-kubectl get svc
-kubectl get ingress
+🔹 STEP 6 — Wait for ALB
+kubectl get ingress -w
+You will see LB URL in a while
 
-Test Path Routing
-Open browser:
+🌐 STEP 7 — Access the App
+✅ These will work:
 http://<ALB-DNS>/app1
 http://<ALB-DNS>/app2
 http://<ALB-DNS>/app3
 
-Note: To restart any deployment: kubectl rollout restart deployment <deployment-name>
+****************************
+CLEAN UP COMMANDS
+****************************
+🧹 PHASE 1 — Delete Kubernetes Workloads
+🔥 Delete Ingress (THIS deletes ALB)
+kubectl delete ingress microservices-ingress
+
+👉 Wait ~1–2 minutes (ALB deletion is async)
+
+🔥 Delete Services
+kubectl delete svc app1-service app2-service app3-service
+🔥 Delete Deployments (Pods go away)
+kubectl delete deploy app1 app2 app3
+🔥 Delete everything (shortcut if needed)
+kubectl delete all --all
+
+🧹 PHASE 2 — Clean AWS Load Balancer Resources
+🔍 Verify ALB deletion
+kubectl get ingress
+
+👉 Should be empty
+
+🔍 Check AWS Console (IMPORTANT)
+
+Go to:
+
+EC2 → Load Balancers → delete if still exists
+EC2 → Target Groups → delete all k8s-*
+
+🧹 PHASE 3 — Delete TargetGroupBindings (VERY IMPORTANT)
+kubectl get targetgroupbindings
+kubectl delete targetgroupbindings --all
+
+🧹 PHASE 4 — Remove AWS Load Balancer Controller
+🔥 Uninstall Helm release
+helm uninstall aws-load-balancer-controller -n kube-system
+🔍 Verify
+kubectl get pods -n kube-system
+
+👉 No controller pods should exist
+
+🧹 PHASE 5 — Delete IAM Service Account (IRSA)
+eksctl delete iamserviceaccount \
+  --cluster kastro-clusterr \
+  --namespace kube-system \
+  --name aws-load-balancer-controller \
+  --region ap-south-1
+
+🧹 PHASE 6 — Delete IAM Policy (Optional)
+aws iam delete-policy \
+  --policy-arn arn:aws:iam::560185625463:policy/AWSLoadBalancerControllerIAMPolicy-v3
+🧹 PHASE 7 — Delete OIDC Provider (Optional advanced cleanup)
+
+⚠️ Only if you won’t use IRSA anymore:
+
+aws iam list-open-id-connect-providers
+
+Then:
+
+aws iam delete-open-id-connect-provider \
+  --open-id-connect-provider-arn <OIDC-ARN>
+
+🧹 PHASE 8 — Delete Entire EKS Cluster (FULL CLEANUP)
+
+👉 If you want complete teardown
+
+eksctl delete cluster \
+  --name kastro-clusterr \
+  --region ap-south-1
