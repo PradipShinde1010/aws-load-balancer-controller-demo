@@ -47,10 +47,12 @@ Step 2 – Create IAM Policy
 curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.6.0/docs/install/iam_policy.json
 
 aws iam create-policy \
---policy-name AWSLoadBalancerControllerIAMPolicy \
---policy-document file://iam_policy.json
+  --policy-name AWSLoadBalancerControllerIAMPolicy-v2 \
+  --policy-document file://iam_policy.json
 
-(If policy is already created, no issues. Proceed to next step)
+aws iam attach-role-policy \
+  --role-name AmazonEKSLoadBalancerControllerRole \
+  --policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/AWSLoadBalancerControllerIAMPolicy-v2
 
 Step 3 – Create IAM Service Account
 eksctl create iamserviceaccount \
