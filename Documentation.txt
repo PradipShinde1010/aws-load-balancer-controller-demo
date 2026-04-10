@@ -59,6 +59,9 @@ eksctl create iamserviceaccount \
   --region ap-south-1
 
 🔹 STEP 4 — Install Controller
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+helm version
+
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update
 
