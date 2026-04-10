@@ -1,0 +1,341 @@
+🚀 DOMAIN SETUP
+🔹 STEP 1 — Create SSL Certificate (ACM)
+Go to:
+👉 AWS Console → Certificate Manager
+👉 Region: ap-south-1 (VERY IMPORTANT)
+
+Fill options:
+Domain name:
+learndevops01.click
+Add another name:
+*.learndevops01.click
+
+Validation:
+✅ DNS validation
+
+Key:
+✅ RSA 2048
+
+Export:
+✅ Disable export
+👉 Click Request
+
+🔹 STEP 2 — Validate Certificate
+Since you’re using Route53:
+👉 Click:
+“Create records in Route53”
+Wait ~2–5 mins → Status:
+ISSUED ✅
+
+🔹 STEP 3 — Copy Certificate ARN
+Example:
+arn:aws:acm:ap-south-1:560185625463:certificate/89439831-0abf-4464-a8eb-0b3338315909
+👉 Save this (you’ll use it in YAML)
+
+🔹 STEP 4 — Update Ingress YAML
+✅ FINAL WORKING YAML
+
+Replace <CERT-ARN> with your actual ARN
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: microservices-ingress
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # 🔐 HTTPS CONFIG
+    alb.ingress.kubernetes.io/certificate-arn: <CERT-ARN>
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+
+spec:
+  ingressClassName: alb
+  rules:
+  - host: learndevops01.click
+    http:
+      paths:
+
+      # ✅ DEFAULT → app1
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app1-service
+            port:
+              number: 80
+
+      - path: /app1
+        pathType: Prefix
+        backend:
+          service:
+            name: app1-service
+            port:
+              number: 80
+
+      - path: /app2
+        pathType: Prefix
+        backend:
+          service:
+            name: app2-service
+            port:
+              number: 80
+
+      - path: /app3
+        pathType: Prefix
+        backend:
+          service:
+            name: app3-service
+            port:
+              number: 80
+
+🔹 STEP 5 — Apply Ingress
+kubectl apply -f k8s/ingress.yaml
+
+🔹 STEP 6 — Wait for ALB
+kubectl get ingress -w
+👉 You’ll see:
+ADDRESS: k8s-microservices-xxxxx.ap-south-1.elb.amazonaws.com
+
+🔹 STEP 7 — Configure Route53
+Go to:
+👉 Route53 → Hosted Zones → learndevops01.click
+Create Record:
+Type: A
+Name: (leave empty) → root domain
+Alias: ✅ YES
+Target:
+👉 Select your ALB
+👉 Save
+Wait till the record status is shown as "INSYNC"
+
+🔹 STEP 8 — Test
+After 1–2 mins:
+✅ Works:
+https://learndevops01.click
+https://learndevops01.click/app1
+https://learndevops01.click/app2
+https://learndevops01.click/app3
+
+This is path based routing.
+==========================================
+Now lets do subdomain based routing
+
+🚀 WHAT IS SUBDOMAIN ROUTING?
+Instead of:
+learndevops01.click/app1
+learndevops01.click/app2
+
+You use:
+app1.learndevops01.click
+app2.learndevops01.click
+app3.learndevops01.click
+
+🔍 PATH vs SUBDOMAIN (Quick Difference)
+Feature					Path-Based	Subdomain-Based
+URL					/app1		app1.domain.com
+Isolation				Low		High
+Production usage			Less		More
+Microservices standard	❌			✅
+App config issues		Common	Rare
+
+👉 Key point:
+Subdomains behave like separate apps, paths behave like one app with routes
+
+❓ DO YOU NEED TO DELETE ANYTHING?
+👉 ❌ NO deletion required
+BUT 👇
+You have 2 options:
+✅ Option 1 (Recommended)
+👉 Modify existing Ingress
+❌ Option 2
+👉 Delete and recreate (not needed)
+
+⚠️ IMPORTANT PREREQUISITE
+Since you already added:
+*.learndevops01.click
+👉 Your current certificate already supports subdomains ✅
+No new certificate needed.
+
+🔹 STEP 1 — Update Ingress YAML
+👉 Replace your current Ingress with this:
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: microservices-ingress
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # 🔐 SSL
+    alb.ingress.kubernetes.io/certificate-arn: <CERT-ARN>
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+
+spec:
+  ingressClassName: alb
+  rules:
+
+  # 🔹 APP1
+  - host: app1.learndevops01.click
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app1-service
+            port:
+              number: 80
+
+  # 🔹 APP2
+  - host: app2.learndevops01.click
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app2-service
+            port:
+              number: 80
+
+  # 🔹 APP3
+  - host: app3.learndevops01.click
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app3-service
+            port:
+              number: 80
+
+🔹 STEP 2 — Apply
+kubectl apply -f k8s/ingress.yaml
+
+🔹 STEP 3 — Route53 Setup (VERY IMPORTANT)
+Go to:
+👉 Route53 → Hosted Zone → learndevops01.click
+
+Create 3 records:
+Record 1:
+Name: app1
+Type: A
+Alias: ✅ YES
+Target: ALB
+
+Record 2:
+Name: app2
+Type: A
+Alias: ✅ YES
+Target: ALB
+
+Record 3:
+Name: app3
+Type: A
+Alias: ✅ YES
+Target: ALB
+
+🔹 STEP 4 — Test
+After 1–2 mins:
+✅
+https://app1.learndevops01.click
+https://app2.learndevops01.click
+https://app3.learndevops01.click
+
+But now when you access the app, you will see the app in the browser as;
+https://app1.learndevops01.click	-----> APP-1 root
+https://app2.learndevops01.click	-----> APP-2 root
+https://app3.learndevops01.click	-----> APP-3 root
+
+This is because in the current code, 
+
+from flask import Flask
+app = Flask(__name__)
+
+@app.route("/app1")
+def home():
+    return "Hello from APP-1 🚀"
+
+@app.route("/")
+def root():
+    return "APP-1 root"
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
+we have clearly written that, 
+	if the path is /app1 ----> it will display ----> Hello from APP-1
+	if the path is / ----> it will display ----> APP-1 root
+
+So is why we are seeing that in the browser.
+
+But in real-time we will not have something like this. We will write a common code which supports both, path based and sub-domain based routing.
+
+Below is the updated code;
+🔹 App1
+
+from flask import Flask
+app = Flask(__name__)
+
+def response():
+    return "Hello from APP-1 🚀"
+
+# Root (subdomain case)
+@app.route("/")
+def root():
+    return response()
+
+# Path-based case
+@app.route("/app1")
+def app1():
+    return response()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
+🔹 App2
+
+def response():
+    return "Hello from APP-2 🔥"
+
+@app.route("/")
+def root():
+    return response()
+
+@app.route("/app2")
+def app2():
+    return response()
+
+🔹 App3
+
+def response():
+    return "Hello from APP-3 ⚡"
+
+@app.route("/")
+def root():
+    return response()
+
+@app.route("/app3")
+def app3():
+    return response()
+
+
+🔁 RESULT
+Now BOTH will work:
+✅ Subdomain
+https://app1.learndevops01.click → Hello from APP-1 🚀
+
+✅ Path-based
+https://learndevops01.click/app1 → Hello from APP-1 🚀
+
+🔁 After the code change, redeploy everything
+docker build ...
+docker push ...
+kubectl rollout restart deployment <your-deployment>
+
+
