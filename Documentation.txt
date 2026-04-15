@@ -75,7 +75,7 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 🔍 Verify:
 kubectl get pods -n kube-system
 
-🔹 STEP 5 — Deploy Apps Deployment .yml files
+🔹 STEP 5 — Deploy ALL 3 Apps Deployment .yml files
 kubectl apply -f k8s/app1-deployment.yaml
 kubectl apply -f k8s/app2-deployment.yaml
 kubectl apply -f k8s/app3-deployment.yaml
