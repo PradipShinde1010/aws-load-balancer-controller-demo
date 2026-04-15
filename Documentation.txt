@@ -78,11 +78,16 @@ kubectl get pods -n kube-system
 🔹 STEP 5 — Deploy Apps 
 kubectl apply -f k8s/
 
-🔹 STEP 6 — Wait for ALB
+
+🔹 STEP 6 — Deploy Ingress controller
+kubectl apply -f k8s/ingress.yml
+
+
+🔹 STEP 7 — Wait for ALB
 kubectl get ingress -w
 You will see LB URL in a while
 
-🌐 STEP 7 — Access the App
+🌐 STEP 8 — Access the App
 ✅ These will work:
 http://<ALB-DNS>/app1
 http://<ALB-DNS>/app2
